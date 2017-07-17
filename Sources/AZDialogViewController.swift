@@ -7,12 +7,28 @@
 //
 
 import UIKit
+import AVKit
+import AVFoundation
+import KVOController
 
 public typealias ActionHandler = ((AZDialogViewController)->(Void))
 
 open class AZDialogViewController: UIViewController{
 
     //MARK: - Private Properties
+    
+    //The player used to play audios and videos
+    fileprivate var player: AVPlayer?
+    
+    //The layer used to display the video or visuals of audio
+    fileprivate var playerLayer: AVPlayerLayer?
+    
+    //Used to update video progress with respect to screen refresh rate
+    var updater : CADisplayLink?
+    
+    //The content's origin url for streaming and playback
+    var contentUrl: String?
+    
     
     /// The container that holds the image view.
     fileprivate var imageViewHolder: UIView!
@@ -126,7 +142,7 @@ open class AZDialogViewController: UIViewController{
     
     open fileprivate(set) var spacing: CGFloat = -1
     
-    open fileprivate(set) var stackSpacing: CGFloat = 0
+    open fileprivate(set) var stackSpacing: CGFloat = 8.0
     
     open fileprivate(set) var sideSpacing: CGFloat = 20.0
     
@@ -377,6 +393,7 @@ open class AZDialogViewController: UIViewController{
     ///   - animated: Should it dismiss with animation? default is true.
     ///   - completion: Completion block that is called after the controller is dismiss.
     override open func dismiss(animated: Bool = true,completion: (()->Void)?=nil){
+        self.stopVideo()
         if animated {
             UIView.animate(withDuration: animationDuration, animations: { [weak self] () -> Void in
                 if let `self` = self{
@@ -522,7 +539,7 @@ open class AZDialogViewController: UIViewController{
     public convenience init(title: String?=nil,
                      message: String?=nil,
                      verticalSpacing spacing: CGFloat = -1,
-                     buttonSpacing stackSpacing:CGFloat = 10,
+                     buttonSpacing stackSpacing:CGFloat = 8.0,
                      sideSpacing: CGFloat = 20,
                      titleFontSize: CGFloat = 0,
                      messageFontSize: CGFloat = 0,
@@ -920,6 +937,86 @@ open class AZDialogViewController: UIViewController{
             self?.imageView.transform = inverseTransform
         }
         
+    }
+    
+    public func stopVideo() {
+        self.updater?.invalidate()
+        self.playerLayer?.removeFromSuperlayer()
+        self.playerLayer = nil
+        self.player?.cancelPendingPrerolls()
+        self.player?.currentItem?.asset.cancelLoading()
+        self.player?.replaceCurrentItem(with: nil)
+        self.player?.pause()
+        self.player = nil
+    }
+    
+    weak var imageViewToDelete: UIImageView?
+    public func setupVideoType(contentUrl: String, imageViewToDelete: UIImageView) {
+        self.imageViewToDelete = imageViewToDelete
+        let mediaContent = UIView()
+        
+//        mediaContent.backgroundColor = UIColor.black
+        
+        self.container.addSubview(mediaContent)
+        
+        mediaContent.translatesAutoresizingMaskIntoConstraints = false
+        
+        mediaContent.heightAnchor.constraint(equalTo: mediaContent.widthAnchor).isActive = true
+        mediaContent.widthAnchor.constraint(equalTo: self.container.widthAnchor, multiplier: 0.7).isActive = true
+        mediaContent.centerXAnchor.constraint(equalTo: self.container.centerXAnchor).isActive = true
+        mediaContent.centerYAnchor.constraint(equalTo: self.container.centerYAnchor).isActive = true
+        
+        self.updater = CADisplayLink(target: self, selector: #selector(AZDialogViewController.trackPlayback))
+        self.updater?.add(to: RunLoop.current, forMode: .defaultRunLoopMode)
+        
+        let videoURL = URL(string: contentUrl)!
+        self.player = AVPlayer(url: videoURL)
+        player?.actionAtItemEnd = .none
+        NotificationCenter.default.addObserver(self,
+                                               selector: #selector(AZDialogViewController.playerDidReachEnd),
+                                               name: .AVPlayerItemDidPlayToEndTime,
+                                               object: player?.currentItem)
+        self.kvoController.observe(player, keyPath: #keyPath(AVPlayer.status), options: [.new]) { (observer, player, change) in
+            if let player = (player as? AVPlayer) {
+                switch player.status {
+                case .unknown:
+                    //TODO: display wtf status
+                    print("UNKNWON EXPAND")
+                    break
+                case .failed:
+                    //TODO: Display error
+                    print("FAILED EXPAND")
+                    break
+                case .readyToPlay:
+                    print("READYTOPLAY EXPAND")
+                    print("CURRENT TIME:")
+                }
+            }
+        }
+        playerLayer = AVPlayerLayer(player: player)
+        playerLayer?.frame = imageViewToDelete.bounds
+        self.kvoController.observe(imageViewToDelete, keyPath: #keyPath(UIImageView.bounds), options: [.new]) { [weak self] (observer, imageView, change) in
+            if let imageView = (imageView as? UIImageView) {
+                self?.playerLayer?.frame = imageView.bounds
+            }
+        }
+        imageViewToDelete.layer.addSublayer(playerLayer!)
+        player?.play()
+    }
+    
+    func trackPlayback() {
+        if let player = player {
+            if player.currentTime().seconds > 0.01 {
+//                self.view.subviews.forEach {if $0 is UIImageView {$0.removeFromSuperview()}}
+//                self.imageViewToDelete?.remove/FromSuperview()
+            }
+        }
+    }
+    
+    func playerDidReachEnd(notification: NSNotification) {
+        if let playerItem = notification.object as? AVPlayerItem {
+            playerItem.seek(to: kCMTimeZero)
+        }
     }
 }
 

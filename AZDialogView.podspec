@@ -8,4 +8,5 @@ Pod::Spec.new do |s|
   s.platform     = :ios, "9.0"
   s.source       = { :git => "https://github.com/Minitour/AZDialogViewController.git", :tag => "#{s.version}" }
   s.source_files  = "Sources/**/*.{swift}"
+  s.dependency "KVOController"
 end
