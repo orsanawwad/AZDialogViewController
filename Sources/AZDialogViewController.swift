@@ -380,8 +380,8 @@ open class AZDialogViewController: UIViewController{
     /// The primary fuction to present the dialog.
     ///
     /// - Parameter controller: The View controller in which you wish to present the dialog.
-    open func show(in controller: UIViewController){
-        controller.present(self, animated: false, completion: nil)
+    open func show(in controller: UIViewController, completion: (()->())? = nil){
+        controller.present(self, animated: false, completion: completion)
     }
     
     
